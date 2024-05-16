@@ -33,19 +33,28 @@ class LineDirection():
         
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
+        # 独立检测用 图像复制
         D1image=self.image.copy()
         D2image=self.image.copy()
         D3image=self.image.copy()
+        # 调用分别调用函数
         self.D1_point=self.Direction_1(D1image)
         self.D2_point=self.Direction_2(D2image,self.D1_point[1]) # direction for D2
+        
         self.D3_point, self.D3_point_LR =self.Direction_3(D3image)
+
         converted_data_LR = ([int(x) for x in self.D3_point_LR[0]], [int(x) for x in self.D3_point_LR[1]])
         self.D3_point_LR=[converted_data_LR]
-        print("-----LR--------",self.D3_point_LR )
+
+        # print("-----LR--------",self.D3_point_LR )
         # take 3 angle
         R1,R2,R3,D1_point, D2_point, D3_point=self.draw_lines(self.image, self.D1_point, self.D2_point, self.D3_point, self.D3_point_LR)
         
         return R1,R2,R3,D1_point, D2_point, D3_point
+    
+    #TODO 预处理 
+    def preprocess(self, image):
+        image = cv2.GaussianBlur(image, (5, 5), 0)
         
 
     def Direction_1(self, image):
@@ -115,7 +124,6 @@ class LineDirection():
         sorted_cp_with_index = sorted(enumerate(center_point), key=lambda x: max(np.linalg.norm(np.array(x[1]) - np.array(y)) for y in center_point), reverse=True)[:2]
 
         #point检测
-        print("shede",sorted_cp_with_index)
 
         # 1:1 point type
         if group_lens[sorted_cp_with_index[0][0]]==1 and group_lens[sorted_cp_with_index[1][0]]==1:
@@ -127,57 +135,27 @@ class LineDirection():
                 if dist > farthest_dist:
                     farthest_dist = dist
                     farthest_point = tuple(point)
-            print("res:",farthest_point)
+            #print("res:",farthest_point)
             return image_center,farthest_point
         
         # 1:n point type
         elif group_lens[sorted_cp_with_index[0][0]]==1:
-            print("res:",sorted_cp_with_index[0][1])
+            #print("res:",sorted_cp_with_index[0][1])
             return image_center,(sorted_cp_with_index[0][1])
         
         # n:1 point type
         elif group_lens[sorted_cp_with_index[1][0]]==1:
-            print("res:",sorted_cp_with_index[1][1])
+            #print("res:",sorted_cp_with_index[1][1])
             return image_center,(sorted_cp_with_index[1][1])
         
         # n:n point type
         else:
             if calculate_length(group[sorted_cp_with_index[0][0]])<calculate_length(group[sorted_cp_with_index[1][0]]):
-                print("res:",sorted_cp_with_index[0][1])
+                #print("res:",sorted_cp_with_index[0][1])
                 return image_center,(sorted_cp_with_index[0][1])
             else:
-                print("res:",sorted_cp_with_index[1][1])
+                #print("res:",sorted_cp_with_index[1][1])
                 return image_center,(sorted_cp_with_index[1][1])
-
-        
-        # for i in range(len(approx[:, 0, :])):
-        #     for j in range(i + 1, len(approx[:, 0, :])):
-        #         # 计算点对之间的距离
-        #         distance = np.linalg.norm(points[i] - points[j])
-        #         # 如果当前距离大于最大距离，则更新最大距离和最大点对
-        #         if distance > max_distance:
-        #             max_distance = distance
-        #             max_points = (points[i], points[j])
-
-        # point1, point2 = max_points
-        # # 计算最远的两对点的直线方程 y = mx + b
-        # m1 = (point2[1] - point1[1]) / (point2[0] - point1[0])
-        # b1 = point1[1] - m1 * point1[0]
-        # # 另一条线的斜率和截距
-        # m2 = -1 / m1  # 垂直于第一条线的斜率的负倒数
-        # b2 = point1[1] - m2 * point1[0]
-
-        # x_intersect = (b2 - b1) / (m1 - m2)
-        # # 代入其中一个方程得到 y 坐标
-        # y_intersect = m1 * x_intersect + b1
-
-        # print("------test--------")
-        # print(approx[:, 0, :])
-        # print((x_intersect, y_intersect))
-        # print("最远的两对点：", point1, point2)
-        # print("------------------")
-
-        # return image_center,(int(x_intersect), int(y_intersect))
 
 
     def Direction_2(self, image,direction):
@@ -252,7 +230,7 @@ class LineDirection():
 
         # lefty = int((-x * vy / vx) + y)
         # righty = int(((image.shape[1] - x) * vy / vx) + y)
-
+        # image segmentation
 
         # cv2.line(image, (image.shape[1] - 1, righty), (0, lefty), (0, 255, 0), 2)
         # closest_line = ((0, lefty),(image.shape[1] - 1, righty), )
@@ -272,8 +250,8 @@ class LineDirection():
             
         #     # return closest_line
                 
-        plt.imshow(image)
-        plt.show()
+        # plt.imshow(image)
+        # plt.show()
 
         return (image_center,nearest_point)
 
@@ -428,13 +406,10 @@ class LineDirection():
 if __name__ == '__main__':
     # test code
     image_center = (338, 232)
-    # image_path = r'D:\git\Deamnet\0221tests_imgD2\20240123_133704point_mask.jpg'
-
-    image_path = r'tests_out0x00000002_20240120030318077_imgpoint_mask.jpg'
-    output_path = r'tests_out2'
+    image_path = r'D:\git\Deamnet\0221tests_imgD2\20240123_133704point_mask.jpg'
+    output_path = r'D:\git\Deamnet\index_2024'
     image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if not os.path.exists(output_path):
         os.makedirs(output_path)
     lineDirection1 = LineDirection( Image=image,Center=image_center,Start_Pos=(195, 395),End_Pos=(547,393))
     lineDirection1()
-    

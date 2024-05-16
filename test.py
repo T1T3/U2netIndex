@@ -1,5 +1,7 @@
 import math
 import os
+import sys
+
 
 import cv2
 import matplotlib.pyplot as plt
@@ -11,40 +13,76 @@ from models.net import U2NET
 
 class Tester(object):
 
-    def __init__(self, is_cuda=False):
+    def __init__(self):
         self.net = U2NET(3, 2)
-        self.device = torch.device('cuda:1' if torch.cuda.is_available() and is_cuda else 'cpu')
-        self.net.load_state_dict(torch.load('weight/net.pt', map_location='cpu'))
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.net.load_state_dict(torch.load('weight/net0515_449_37350.pt', map_location='cpu'))
         self.net.eval().to(self.device)
 
         '''以下为超参数，需要根据不同表盘类型设定'''
-        self.line_width = 1600  # 表盘展开为直线的长度
+        self.line_width = 1000  # 表盘展开为直线的长度
         self.line_height = 150  # 表盘展开为直线的宽度
-        self.circle_radius = 200  # 预设圆盘直径
-        self.circle_center = [208, 208]  # 圆盘指针的旋转中心
+        self.circle_radius = 512 # 200  # 预设圆盘直径
+        self.circle_center = [306, 237]# [208, 208]  # 圆盘指针的旋转中心
         self.pi = 3.1415926535898
 
+
     @torch.no_grad()
-    def __call__(self, image):
-        image = self.square_picture(image, 416)
-        image_tensor = self.to_tensor(image.copy()).to(self.device)
+    def __call__(self, image,image_name='', output_path='./output/'):
+        image_name = image_name
+        output_path = output_path
+        
+        try:
+            image_tensor = self.to_tensor(image.copy()).to(self.device)
+        except :
+            print("!---ERROR :",image_name)
+            return None
         d0, d1, d2, d3, d4, d5, d6 = self.net(image_tensor)
         mask = d0.squeeze(0).cpu().numpy()
         point_mask = self.binary_image(mask[0])
         dail_mask = self.binary_image(mask[1])
-        relative_value = self.get_relative_value(point_mask, dail_mask)
-        print(relative_value)
-        # cv2.imshow('point_mask', point_mask)
-        # cv2.imshow('dail_mask', dail_mask)
-        cv2.imshow('image', image)
+        relative_value = self.get_relative_value(point_mask, dail_mask,output_path)
+
+        cv2.putText(image, f"relative_value: {relative_value['ratio']:.6f} degrees", (10, 30),cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
+        
+        
+        index_mask = point_mask.copy()
+
+        if index_mask is not None :
+            img_converted = numpy.where(index_mask != 0, 255, index_mask)
+            img_converted = index_mask * 255
+            cv2.imwrite(output_path + image_name + 'point_mask.jpg' , img_converted)
+
+
+        #cv2.imwrite(output_path + image_name + 'dail_mask.jpg' , dail_mask)
         condition = point_mask ==1
         image[condition] = (0,0,255)
         condition = dail_mask == 1
         image[condition] = (0, 255, 0)
-        cv2.imshow('image_mask', image)
-        cv2.waitKey()
+        # cv2.imshow('image_mask', image)
+        # cv2.waitKey()
+        
+        # save images
+        #cv2.imwrite(output_path + image_name + '_mask.jpg' , image)
+        return None
+    
+    def detectU2net(self, image):
+        image_tensor = self.to_tensor(image.copy()).to(self.device)
+        d0, d1, d2, d3, d4, d5, d6 = self.net(image_tensor)
+        mask = d0.squeeze(0).cpu().detach().numpy()
+        point_mask = self.binary_image(mask[0])
+        dail_mask = self.binary_image(mask[1])
+        # relative_value = self.get_relative_value(point_mask, dail_mask,None)
+        
+        gray_mask = (point_mask * 255).astype(numpy.uint8)
 
-        pass
+        condition = point_mask ==1
+        image[condition] = (0,0,255)
+        condition = dail_mask == 1
+        image[condition] = (0, 255, 0)
+
+
+        return image,gray_mask
 
     def binary_image(self, image):
         condition = image > 0.5
@@ -53,18 +91,34 @@ class Tester(object):
         image = self.corrosion(image)
         return image
 
-    def get_relative_value(self, image_pointer, image_dail):
+    def get_relative_value(self, image_pointer, image_dail,output_path):
         line_image_pointer = self.create_line_image(image_pointer)
         line_image_dail = self.create_line_image(image_dail)
         data_1d_pointer = self.convert_1d_data(line_image_pointer)
         data_1d_dail = self.convert_1d_data(line_image_dail)
         data_1d_dail = self.mean_filtration(data_1d_dail)
+
+        _, ax = plt.subplots()
         # plt.plot(numpy.arange(0,len(data_1d_pointer)),data_1d_pointer)
         # plt.plot(numpy.arange(0, len(data_1d_dail)), data_1d_dail)
+        ax.plot(numpy.arange(0, len(data_1d_pointer)), data_1d_pointer, label='Pointer')
+        ax.plot(numpy.arange(0, len(data_1d_dail)), data_1d_dail, label='Dail')
+
+        # plt save
+        if output_path==None :
+            pass
+        else:
+            plt.savefig(output_path + image_name.split('.')[0] + '_ratio.jpg')
+            plt.close()
+        
         # plt.show()
-        # exit()
+
+        # SAVE IMAGES
+        # cv2.imwrite(output_path + image_name + 'line_image_pointer.jpg' , line_image_pointer)
+        # cv2.imwrite(output_path + image_name + 'line_image_dail.jpg' , line_image_dail)
         # cv2.imshow('line_image_pointer', line_image_pointer)
         # cv2.imshow('line_image_dail', line_image_dail)
+
         '''定位指针相对刻度位置'''
         dail_flag = False
         pointer_flag = False
@@ -121,7 +175,12 @@ class Tester(object):
                 '''计算当前扫描点对应于原图的位置'''
                 y = int(self.circle_center[0] + radius * math.cos(theta) + 0.5)
                 x = int(self.circle_center[1] - radius * math.sin(theta) + 0.5)
-                line_image[row, col] = image_mask[y, x]
+                # print(radius,y,x)
+                try:
+                    line_image[row, col] = image_mask[y, x]
+                except IndexError:
+                    pass
+
         # plt.imshow(line_image)
         # plt.show()
         return line_image
@@ -190,9 +249,13 @@ class Tester(object):
 
 
 if __name__ == '__main__':
-    tester = Tester()
+
     root = 'data/images/val'
+    OutputPath= 'data/results/'
+    if not os.path.exists(OutputPath):
+        os.makedirs(OutputPath)
+    tester = Tester()
     for image_name in os.listdir(root):
         path = f'{root}/{image_name}'
         image = cv2.imread(path)
-        tester(image)
+        tester(image,image_name.split('.')[0],output_path=OutputPath)

@@ -12,20 +12,21 @@ class MeterReader(object):
     def __init__(self, is_cuda=False):
         self.net = U2NET(3, 2)
         self.device = torch.device('cuda:0' if torch.cuda.is_available() and is_cuda else 'cpu')
-        self.net.load_state_dict(torch.load('weight/net.pt', map_location='cpu'))
+        self.net.load_state_dict(torch.load('weight/net0515_499_41500', map_location='cpu'))
         self.net.eval().to(self.device)
 
         '''以下为超参数，需要根据不同表盘类型设定'''
         self.line_width = 1600  # 表盘展开为直线的长度,按照表盘的图像像素周长计算
         self.line_height = 150  # 表盘展开为直线的宽度，该设定按照围绕圆心的扇形宽度计算，需要保证包含刻度以及一部分指针
         self.circle_radius = 200  # 预设圆盘直径，扫描的最大直径，需要小于图幅，否者可能会报错
-        self.circle_center = [208, 208]  # 圆盘指针的旋转中心，预设的指针旋转中心
+        self.circle_center = [342, 244]  # 圆盘指针的旋转中心，预设的指针旋转中心
         self.pi = 3.1415926535898  # 参数PI
         self.threshold = 0.5  # 分割的阈值
 
     @torch.no_grad()
     def __call__(self, image):
-        image = self.square_picture(image, 416)
+        # image = self.square_picture(image, 416)
+        image = self.square_picture(image, 640)
         image_tensor = self.to_tensor(image.copy()).to(self.device)
         d0, d1, d2, d3, d4, d5, d6 = self.net(image_tensor)
         mask = d0.squeeze(0).cpu().numpy()
